@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Calgary Building Permits (GeoJSON)</title>
+  <title>Calgary Building Permits</title>
 
   <!-- Leaflet CSS -->
   <link 
@@ -11,27 +11,24 @@
   />
 
   <!-- jQuery -->
-  <script
-    src="https://code.jquery.com/jquery-3.6.0.min.js">
-  </script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
   <!-- Moment JS -->
-  <script
-    src="https://cdn.jsdelivr.net/npm/moment@2.29.3/moment.min.js">
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.3/moment.min.js"></script>
 
   <!-- Date Range Picker CSS/JS -->
   <link 
     rel="stylesheet" 
     href="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.css"
   />
-  <script 
-    src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js">
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js"></script>
 
   <!-- Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- OverlappingMarkerSpiderfier (CDN) -->
+  <script 
+    src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js">
   </script>
 
   <style>
@@ -62,10 +59,12 @@
 </head>
 <body>
 
-<h1>Calgary Building Permits (GeoJSON)</h1>
+<h1>Calgary Building Permits</h1>
 
 <div id="controls">
-  <label for="issuedDateRange">Issued Date Range:</label>
+  <label for="issuedDateRange">
+    <strong>Issued Date Range:</strong>
+  </label>
   <input type="text" id="issuedDateRange" />
   <button id="searchBtn">Search</button>
 </div>
@@ -74,36 +73,59 @@
 
 <script>
   $(function(){
-    // 1) Initialize Leaflet map centered on Calgary
+    // 1) Create Leaflet map centered on Calgary
     const map = L.map('map').setView([51.0447, -114.0719], 11);
-
-    // 2) Base tile layer (OpenStreetMap)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: 'Map data © OpenStreetMap contributors'
     }).addTo(map);
 
-    // Use a LayerGroup for adding/removing markers
+    // 2) OverlappingMarkerSpiderfier instance
+    const oms = new OverlappingMarkerSpiderfier(map, {
+      keepSpiderfied: true
+    });
+    // So that spiderfied markers automatically open popups
+    oms.addListener('click', marker => {
+      marker.openPopup();
+    });
+
+    // 3) Optional: a layer group for markers so we can clear them
     let markersLayer = L.layerGroup().addTo(map);
 
-    // --- HARDCODE "today" as Dec 31, 2023 (or choose your own date) ---
-    const fakeToday = moment('2023-12-31', 'YYYY-MM-DD');
-    
-    // End date is "yesterday" relative to fakeToday
-    let endDate = fakeToday.clone().subtract(1, 'days'); 
-    // Start date is 30 days before that
+    // 4) Two icons: default (blue) and highlight (red)
+    const defaultIcon = L.icon({
+      iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
+      shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
+      iconSize:     [25, 41],
+      iconAnchor:   [12, 41],
+      popupAnchor:  [1, -34],
+      shadowSize:   [41, 41]
+    });
+    const highlightIcon = L.icon({
+      iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png',
+      shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
+      iconSize:     [25, 41],
+      iconAnchor:   [12, 41],
+      popupAnchor:  [1, -34],
+      shadowSize:   [41, 41]
+    });
+
+    // Track the currently highlighted marker (if any)
+    let currentlyHighlightedMarker = null;
+
+    // 5) Hard-code a "today" for demonstration (your system clock is 2025)
+    const fakeToday = moment('2025-03-05', 'YYYY-MM-DD');
+    let endDate   = fakeToday.clone().subtract(1, 'days');
     let startDate = endDate.clone().subtract(30, 'days');
 
+    // 6) Initialize the date range picker
     $('#issuedDateRange').daterangepicker({
       autoApply: false,
       linkedCalendars: true,
       showDropdowns: true,
       startDate: startDate,
       endDate: endDate,
-      // Restrict picking anything after Dec 30, 2023
       maxDate: fakeToday.clone().subtract(1, 'days'),
-      locale: {
-        format: 'YYYY-MM-DD'
-      },
+      locale: { format: 'YYYY-MM-DD' },
       ranges: {
         'Yesterday': [
           fakeToday.clone().subtract(1, 'days'), 
@@ -123,32 +145,26 @@
         ]
       }
     }, function(start, end) {
-      // Update variables when the user picks a new date
       startDate = start;
       endDate   = end;
       console.log("Selected: " + start.format('YYYY-MM-DD') + " - " + end.format('YYYY-MM-DD'));
     });
 
-    // 4) On "Search", fetch building permits for the chosen date range
+    // 7) Search button: fetch building permits and place markers
     $('#searchBtn').click(async () => {
-      // Clear any existing markers
+      // Clear old markers from the map & reset highlight
       markersLayer.clearLayers();
+      currentlyHighlightedMarker = null;
 
-      // Build SoQL date filter
+      // Construct SoQL filter
       const startString = startDate.format('YYYY-MM-DDT00:00:00.000');
       const endString   = endDate.format('YYYY-MM-DDT23:59:59.999');
 
-      // *** Switch to the GeoJSON endpoint here ***
       const baseUrl = 'https://data.calgary.ca/resource/c2es-76ed.geojson';
-
-      // We do not use $select in GeoJSON, because
-      // we want the geometry to be returned in standard Feature form
       const params = [
         `$where=issueddate >= '${startString}' AND issueddate <= '${endString}'`,
         '$limit=2000'
       ];
-
-      // Join the SoQL parameters into the query string
       const queryUrl = `${baseUrl}?${params.join('&')}`;
       console.log("Query URL:", queryUrl);
 
@@ -156,23 +172,21 @@
         const resp = await fetch(queryUrl);
         if (!resp.ok) throw new Error("Network error during fetch");
         
-        // The data is a GeoJSON FeatureCollection
         const data = await resp.json();
         console.log("Fetched GeoJSON:", data);
 
-        // data.features: array of GeoJSON Feature objects
+        // data.features is an array of GeoJSON features
         const features = data.features || [];
         const latLngs = [];
 
         features.forEach(feature => {
-          // Each Feature has a geometry (Point, MultiPoint, etc.) and properties
           if (feature.geometry && feature.geometry.type === 'Point') {
-            // For a Point geometry, coordinates = [lng, lat]
             const [lng, lat] = feature.geometry.coordinates;
             if (typeof lat === 'number' && typeof lng === 'number') {
-              // We'll read some attributes from feature.properties
               const props = feature.properties || {};
-              const marker = L.marker([lat, lng]);
+
+              // Create marker with default (blue) icon
+              const marker = L.marker([lat, lng], { icon: defaultIcon });
               marker.bindPopup(`
                 <strong>Issued Date:</strong> ${props.issueddate}<br/>
                 <strong>Work Class:</strong> ${props.workclassgroup || 'N/A'}<br/>
@@ -180,13 +194,35 @@
                 <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
                 <strong>Community:</strong> ${props.communityname || 'N/A'}<br/>
               `);
+
+              // On click: highlight marker, open popup, and fly to it
+              marker.on('click', () => {
+                // Revert previously highlighted marker (if any)
+                if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
+                  currentlyHighlightedMarker.setIcon(defaultIcon);
+                }
+                // Highlight this marker
+                marker.setIcon(highlightIcon);
+                currentlyHighlightedMarker = marker;
+
+                // Open popup
+                marker.openPopup();
+
+                // Zoom in smoothly
+                map.flyTo(marker.getLatLng(), 13.5);
+              });
+
+              // Add to the layer group
               marker.addTo(markersLayer);
+              // Also add to OverlappingMarkerSpiderfier
+              oms.addMarker(marker);
+
               latLngs.push([lat, lng]);
             }
           }
         });
 
-        // Zoom to markers
+        // If we have markers, fit the map bounds to them
         if (latLngs.length > 0) {
           map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50] });
         } else {

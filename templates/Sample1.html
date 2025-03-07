@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Calgary Building Permits</title>
+  <title>Calgary Building Permits (GeoJSON)</title>
 
   <!-- Leaflet CSS -->
   <link 
@@ -86,7 +86,7 @@
     let markersLayer = L.layerGroup().addTo(map);
 
     // --- HARDCODE "today" as Dec 31, 2023 (or choose your own date) ---
-    const fakeToday = moment('2025-02-28', 'YYYY-MM-DD');
+    const fakeToday = moment('2023-12-31', 'YYYY-MM-DD');
     
     // End date is "yesterday" relative to fakeToday
     let endDate = fakeToday.clone().subtract(1, 'days'); 

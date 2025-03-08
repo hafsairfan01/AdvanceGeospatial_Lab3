@@ -2,12 +2,22 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Calgary Building Permits </title>
+  <title>Calgary Building Permits</title>
 
   <!-- Leaflet CSS -->
   <link 
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <!-- MarkerCluster CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
   />
 
   <!-- jQuery -->
@@ -25,6 +35,9 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
   <!-- OverlappingMarkerSpiderfier (CDN) -->
   <script 
@@ -59,7 +72,7 @@
 </head>
 <body>
 
-<h1>Calgary Building Permits </h1>
+<h1>Calgary Building Permits</h1>
 
 <div id="controls">
   <label for="issuedDateRange">
@@ -79,18 +92,24 @@ $(function(){
     attribution: 'Map data © OpenStreetMap contributors'
   }).addTo(map);
 
-  // 2) OverlappingMarkerSpiderfier with keepSpiderfied
+  // 2) Create a MarkerClusterGroup with spiderfy disabled
+  //    This ensures OverlappingMarkerSpiderfier (OMS) handles exact overlaps.
+  let markerCluster = L.markerClusterGroup({
+    // turn off markercluster's spiderfy
+    spiderfyOnEveryZoom: false,
+    spiderfyOnClick: false,
+    disableClusteringAtZoom: 14 // optional to disable cluster
+  });
+  map.addLayer(markerCluster);
+
+  // 3) OverlappingMarkerSpiderfier instance
   const oms = new OverlappingMarkerSpiderfier(map, {
     keepSpiderfied: true
   });
-
-  // Code for single global click popup:
+  
   // oms.addListener('click', marker => marker.openPopup());
 
-  // 3) Markers layer group
-  let markersLayer = L.layerGroup().addTo(map);
-
-  // 4) Icons: default & highlight
+  // 4) Two icons: default & highlight
   const defaultIcon = L.icon({
     iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
     shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
@@ -110,12 +129,12 @@ $(function(){
 
   let currentlyHighlightedMarker = null;
 
-  // Hard-code "today" to 2025-03-06
-  const fakeToday = moment('2025-03-06', 'YYYY-MM-DD');
+  // 5) Hard-code "today" to 2025-03-07
+  const fakeToday = moment('2025-03-07', 'YYYY-MM-DD');
   let endDate   = fakeToday.clone().subtract(1, 'days');
   let startDate = endDate.clone().subtract(30, 'days');
 
-  // 5) Date Range Picker
+  // 6) Initialize the date range picker
   $('#issuedDateRange').daterangepicker({
     autoApply: false,
     linkedCalendars: true,
@@ -148,9 +167,10 @@ $(function(){
     console.log("Selected: " + start.format('YYYY-MM-DD') + " - " + end.format('YYYY-MM-DD'));
   });
 
-  // 6) On "Search"
+  // 7) On "Search"
   $('#searchBtn').click(async () => {
-    markersLayer.clearLayers();
+    // Clear old markers from the cluster
+    markerCluster.clearLayers();
     currentlyHighlightedMarker = null;
 
     const startString = startDate.format('YYYY-MM-DDT00:00:00.000');
@@ -188,40 +208,20 @@ $(function(){
             `);
 
             
-            // Code to track whether this marker has been "re-clicked" after zoom
-            marker._reClicked = false;
-
+            // For normal highlight on click
             marker.on('click', () => {
-              
-              if (marker._reClicked) {
-                // reset for next time
-                marker._reClicked = false;
-
-                // highlight logic
-                if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
-                  currentlyHighlightedMarker.setIcon(defaultIcon);
-                }
-                marker.setIcon(highlightIcon);
-                currentlyHighlightedMarker = marker;
-
-                // open popup
-                marker.openPopup();
-                return; 
+              // highlight logic
+              if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
+                currentlyHighlightedMarker.setIcon(defaultIcon);
               }
-
-              
-              marker._reClicked = true; // to check next click is the re-click
-              map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
-              
-              // once move is done, re-fire the marker click
-              map.once('moveend', () => {
-                marker.fire('click');
-              });
+              marker.setIcon(highlightIcon);
+              currentlyHighlightedMarker = marker;
             });
-            
 
-            // Add to layers and spiderfier
-            marker.addTo(markersLayer);
+            // 8) Add marker to cluster
+            markerCluster.addLayer(marker);
+
+            // 9) Also add to OverlappingMarkerSpiderfier
             oms.addMarker(marker);
 
             latLngs.push([lat, lng]);
@@ -234,7 +234,6 @@ $(function(){
       } else {
         alert("No permits found in that date range!");
       }
-
     } catch (err) {
       alert("Failed to load data. Check console for details.");
       console.error(err);

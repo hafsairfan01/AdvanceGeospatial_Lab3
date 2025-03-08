@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Calgary Building Permits (JSON)</title>
+  <title>Calgary Building Permits </title>
 
   <!-- Leaflet CSS -->
   <link 
@@ -10,166 +10,238 @@
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
   />
 
-  <!-- jQuery (required by daterangepicker) -->
-  <script
-    src="https://code.jquery.com/jquery-3.6.0.min.js"
-    integrity="sha256-/xUj+3OJ+7yX7en+2b6+zUl6Wd4tMz8u4J6GJPsZxXQ="
-    crossorigin="anonymous">
-  </script>
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-  <!-- Moment.js (required by daterangepicker) -->
-  <script 
-    src="https://cdn.jsdelivr.net/npm/moment@2.29.3/moment.min.js">
-  </script>
+  <!-- Moment JS -->
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.3/moment.min.js"></script>
 
-  <!-- Date Range Picker CSS -->
+  <!-- Date Range Picker CSS/JS -->
   <link 
-    rel="stylesheet"
+    rel="stylesheet" 
     href="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.css"
   />
+  <script src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js"></script>
 
-  <!-- Date Range Picker JS -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- OverlappingMarkerSpiderfier (CDN) -->
   <script 
-    src="https://cdn.jsdelivr.net/npm/daterangepicker@3.1/daterangepicker.min.js">
+    src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js">
   </script>
 
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
+      margin: 0; 
+      padding: 0; 
       height: 100%;
       font-family: Arial, sans-serif;
     }
     h1 {
-      margin: 0;
-      padding: 10px;
-      background-color: #eee;
-    }
-    #controls {
-      padding: 10px;
-      background-color: #f2f2f2;
+      text-align: center;
+      margin: 20px;
     }
     #map {
       width: 100%;
-      height: 80vh; /* Enough space for the map */
-      border: 1px solid #ccc; /* optional for seeing the container */
+      height: 80vh;
+    }
+    #controls {
+      padding: 10px;
+      background: #f2f2f2;
+      text-align: center;
+    }
+    #issuedDateRange {
+      width: 220px;
+      margin-right: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>Calgary Building Permits (JSON Endpoint)</h1>
-  <div id="controls">
-    <label for="dateRange">Select Date Range:</label>
-    <input type="text" id="dateRange" />
-    <button id="searchBtn">Search</button>
-    <!-- For example, pick 06/22/1999 - 02/28/2025 -->
-  </div>
 
-  <div id="map"></div>
+<h1>Calgary Building Permits </h1>
 
-  <!-- Leaflet JS (load after the HTML but before our custom script) -->
-  <script 
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-  </script>
+<div id="controls">
+  <label for="issuedDateRange">
+    <strong>Issued Date Range:</strong>
+  </label>
+  <input type="text" id="issuedDateRange" />
+  <button id="searchBtn">Search</button>
+</div>
 
-  <script>
-    // Wrap all JS in a DOM-ready block so jQuery is available
-    $(function() {
-      // 1. Initialize the Leaflet map
-      const map = L.map('map').setView([51.0447, -114.0719], 11);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'Map data © OpenStreetMap contributors'
-      }).addTo(map);
+<div id="map"></div>
 
-      // We'll store our markers in a LayerGroup so we can remove them on each search
-      let markersLayerGroup = L.layerGroup().addTo(map);
+<script>
+$(function(){
+  // 1) Create Leaflet map centered on Calgary
+  const map = L.map('map').setView([51.0447, -114.0719], 11);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'Map data © OpenStreetMap contributors'
+  }).addTo(map);
 
-      // 2. Initialize the date range picker
-      const dateRangeInput = $('#dateRange');
-      dateRangeInput.daterangepicker({
-        autoUpdateInput: false,
-        locale: {
-          format: 'YYYY-MM-DD'
-        }
-      }, function(start, end) {
-        // Once user picks dates, update the input's value
-        dateRangeInput.val(start.format('YYYY-MM-DD') + ' - ' + end.format('YYYY-MM-DD'));
-      });
+  // 2) OverlappingMarkerSpiderfier with keepSpiderfied
+  const oms = new OverlappingMarkerSpiderfier(map, {
+    keepSpiderfied: true
+  });
 
-      // 3. Handle search button
-      $('#searchBtn').click(async () => {
-        const rangeVal = dateRangeInput.val();
-        if (!rangeVal) {
-          alert("Please select a date range first!");
-          return;
-        }
+  // Code for single global click popup:
+  // oms.addListener('click', marker => marker.openPopup());
 
-        const [start, end] = rangeVal.split(" - ");
-        if (!start || !end) {
-          alert("Invalid date range format.");
-          return;
-        }
+  // 3) Markers layer group
+  let markersLayer = L.layerGroup().addTo(map);
 
-        // Construct the date/time filters
-        const startDate = `${start}T00:00:00.000`;
-        const endDate   = `${end}T23:59:59.999`;
+  // 4) Icons: default & highlight
+  const defaultIcon = L.icon({
+    iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
+    shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
+    iconSize:     [25, 41],
+    iconAnchor:   [12, 41],
+    popupAnchor:  [1, -34],
+    shadowSize:   [41, 41]
+  });
+  const highlightIcon = L.icon({
+    iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-red.png',
+    shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
+    iconSize:     [25, 41],
+    iconAnchor:   [12, 41],
+    popupAnchor:  [1, -34],
+    shadowSize:   [41, 41]
+  });
 
-        // 4. Build SoQL query
-        const baseUrl = "https://data.calgary.ca/resource/c2es-76ed.json";
-        const params = [
-          `$where=issueddate >= '${startDate}' AND issueddate <= '${endDate}'`,
-          "$limit=2000",
-          "$select=issueddate,workclassgroup,contractorname,communityname,originaladdress,location,description"
-        ];
-        const queryUrl = `${baseUrl}?${params.join("&")}`;
-        console.log("Query URL:", queryUrl);
+  let currentlyHighlightedMarker = null;
 
-        try {
-          const response = await fetch(queryUrl);
-          if (!response.ok) {
-            throw new Error("Network response was not OK");
-          }
-          const data = await response.json();
+  // Hard-code "today" to 2025-03-06
+  const fakeToday = moment('2025-03-06', 'YYYY-MM-DD');
+  let endDate   = fakeToday.clone().subtract(1, 'days');
+  let startDate = endDate.clone().subtract(30, 'days');
 
-          // Remove old markers
-          markersLayerGroup.clearLayers();
+  // 5) Date Range Picker
+  $('#issuedDateRange').daterangepicker({
+    autoApply: false,
+    linkedCalendars: true,
+    showDropdowns: true,
+    startDate: startDate,
+    endDate: endDate,
+    maxDate: fakeToday.clone().subtract(1, 'days'),
+    locale: { format: 'YYYY-MM-DD' },
+    ranges: {
+      'Yesterday': [
+        fakeToday.clone().subtract(1, 'days'), 
+        fakeToday.clone().subtract(1, 'days')
+      ],
+      'Last 7 Days': [
+        fakeToday.clone().subtract(7, 'days'), 
+        fakeToday.clone().subtract(1, 'days')
+      ],
+      'Last 30 Days': [
+        fakeToday.clone().subtract(30, 'days'), 
+        fakeToday.clone().subtract(1, 'days')
+      ],
+      'This Month': [
+        fakeToday.clone().startOf('month'), 
+        fakeToday.clone().subtract(1, 'days')
+      ]
+    }
+  }, function(start, end) {
+    startDate = start;
+    endDate   = end;
+    console.log("Selected: " + start.format('YYYY-MM-DD') + " - " + end.format('YYYY-MM-DD'));
+  });
 
-          const latLngs = [];
+  // 6) On "Search"
+  $('#searchBtn').click(async () => {
+    markersLayer.clearLayers();
+    currentlyHighlightedMarker = null;
 
-          data.forEach(permit => {
-            // location is typically { "type": "Point", "coordinates": [lng, lat] }
-            if (permit.location && permit.location.coordinates) {
-              const [lng, lat] = permit.location.coordinates;
-              // Make sure lat/lng are valid numbers
-              if (typeof lat === 'number' && typeof lng === 'number') {
-                const marker = L.marker([lat, lng]);
-                marker.bindPopup(`
-                  <strong>Issued Date:</strong> ${permit.issueddate || "N/A"}<br/>
-                  <strong>Work Class:</strong> ${permit.workclassgroup || "N/A"}<br/>
-                  <strong>Contractor:</strong> ${permit.contractorname || "N/A"}<br/>
-                  <strong>Address:</strong> ${permit.originaladdress || "N/A"}<br/>
-                  <strong>Community:</strong> ${permit.communityname || "N/A"}<br/>
-                  <strong>Description:</strong> ${permit.description || "N/A"}
-                `);
-                marker.addTo(markersLayerGroup);
-                latLngs.push([lat, lng]);
+    const startString = startDate.format('YYYY-MM-DDT00:00:00.000');
+    const endString   = endDate.format('YYYY-MM-DDT23:59:59.999');
+    const baseUrl = 'https://data.calgary.ca/resource/c2es-76ed.geojson';
+    const params = [
+      `$where=issueddate >= '${startString}' AND issueddate <= '${endString}'`,
+      '$limit=2000'
+    ];
+    const queryUrl = `${baseUrl}?${params.join('&')}`;
+    console.log("Query URL:", queryUrl);
+
+    try {
+      const resp = await fetch(queryUrl);
+      if (!resp.ok) throw new Error("Network error during fetch");
+      const data = await resp.json();
+
+      const features = data.features || [];
+      const latLngs = [];
+
+      features.forEach(feature => {
+        if (feature.geometry && feature.geometry.type === 'Point') {
+          const [lng, lat] = feature.geometry.coordinates;
+          if (typeof lat === 'number' && typeof lng === 'number') {
+            const props = feature.properties || {};
+
+            // Create marker
+            const marker = L.marker([lat, lng], { icon: defaultIcon });
+            marker.bindPopup(`
+              <strong>Issued Date:</strong> ${props.issueddate}<br/>
+              <strong>Work Class:</strong> ${props.workclassgroup || 'N/A'}<br/>
+              <strong>Contractor:</strong> ${props.contractorname || 'N/A'}<br/>
+              <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
+              <strong>Community:</strong> ${props.communityname || 'N/A'}<br/>
+            `);
+
+            
+            // Code to track whether this marker has been "re-clicked" after zoom
+            marker._reClicked = false;
+
+            marker.on('click', () => {
+              
+              if (marker._reClicked) {
+                // reset for next time
+                marker._reClicked = false;
+
+                // highlight logic
+                if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
+                  currentlyHighlightedMarker.setIcon(defaultIcon);
+                }
+                marker.setIcon(highlightIcon);
+                currentlyHighlightedMarker = marker;
+
+                // open popup
+                marker.openPopup();
+                return; 
               }
-            }
-          });
 
-          // Fit map to the markers if any
-          if (latLngs.length > 0) {
-            const bounds = L.latLngBounds(latLngs);
-            map.fitBounds(bounds, { padding: [50, 50] });
-          } else {
-            alert("No building permits found for the selected date range.");
+              
+              marker._reClicked = true; // to check next click is the re-click
+              map.flyTo(marker.getLatLng(), 14, { duration: 1.2 });
+              
+              // once move is done, re-fire the marker click
+              map.once('moveend', () => {
+                marker.fire('click');
+              });
+            });
+            
+
+            // Add to layers and spiderfier
+            marker.addTo(markersLayer);
+            oms.addMarker(marker);
+
+            latLngs.push([lat, lng]);
           }
-        } catch (error) {
-          console.error("Fetch error:", error);
-          alert("Failed to fetch data. Check console for details.");
         }
       });
-    });
-  </script>
+
+      if (latLngs.length > 0) {
+        map.fitBounds(L.latLngBounds(latLngs), { padding: [50, 50] });
+      } else {
+        alert("No permits found in that date range!");
+      }
+
+    } catch (err) {
+      alert("Failed to load data. Check console for details.");
+      console.error(err);
+    }
+  });
+});
+</script>
+
 </body>
 </html>

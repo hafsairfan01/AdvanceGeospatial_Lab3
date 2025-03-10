@@ -98,7 +98,7 @@ $(function(){
     // turn off markercluster's spiderfy
     spiderfyOnEveryZoom: false,
     spiderfyOnClick: false,
-    disableClusteringAtZoom: 14 // optional to disable cluster
+    disableClusteringAtZoom: 16 // optional to disable cluster at certain point
   });
   map.addLayer(markerCluster);
 
@@ -203,8 +203,8 @@ $(function(){
               <strong>Issued Date:</strong> ${props.issueddate}<br/>
               <strong>Work Class:</strong> ${props.workclassgroup || 'N/A'}<br/>
               <strong>Contractor:</strong> ${props.contractorname || 'N/A'}<br/>
-              <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
               <strong>Community:</strong> ${props.communityname || 'N/A'}<br/>
+              <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
             `);
 
             

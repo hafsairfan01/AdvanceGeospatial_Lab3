@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Calgary Building Permits</title>
+  <title>Calgary Traffic Incidents</title>
 
   <!-- Leaflet CSS -->
   <link 
@@ -39,7 +39,7 @@
   <!-- MarkerCluster JS -->
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- OverlappingMarkerSpiderfier (CDN) -->
+  <!-- OverlappingMarkerSpiderfier -->
   <script 
     src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js">
   </script>
@@ -72,7 +72,7 @@
 </head>
 <body>
 
-<h1>Calgary Building Permits</h1>
+<h1>Calgary Traffic Incidents</h1>
 
 <div id="controls">
   <label for="issuedDateRange">
@@ -86,30 +86,50 @@
 
 <script>
 $(function(){
-  // 1) Create Leaflet map centered on Calgary
-  const map = L.map('map').setView([51.0447, -114.0719], 11);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // 1) Define the base layer (OpenStreetMap)
+  const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: 'Map data © OpenStreetMap contributors'
-  }).addTo(map);
+  });
 
-  // 2) Create a MarkerClusterGroup with spiderfy disabled
-  //    This ensures OverlappingMarkerSpiderfier (OMS) handles exact overlaps.
+  // 2) Create the map and add the base layer
+  const map = L.map('map', {
+    layers: [baseLayer]  
+  }).setView([51.0447, -114.0719], 11);
+
+  // 3) Mapbox style layer with tileSize, zoomOffset, and @2x
+  //    mapbox://styles/hafsairfan89/cm8c0ztd900i601soefp963h2
+  const trafficLayer = L.tileLayer(
+    'https://api.mapbox.com/styles/v1/hafsairfan89/cm8c0ztd900i601soefp963h2/tiles/512/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiaGFmc2FpcmZhbjg5IiwiYSI6ImNtOGNiNjUxYjBiemgyaXE1dGI0ZGxma2MifQ.ze4nyrDI1JHCJzP5YgG-jw',
+    {
+      tileSize: 512,
+      zoomOffset: -1,
+      maxZoom: 19,
+      attribution: '© Mapbox © OpenStreetMap'
+    }
+  );
+
+  trafficLayer.addTo(map);
+
+  // 4) Layer control for toggling the traffic layer
+  const overlayMaps = {
+    "Traffic Incidents": trafficLayer
+  };
+  L.control.layers(null, overlayMaps).addTo(map);
+
+  // 5) Create a MarkerClusterGroup with spiderfy disabled
   let markerCluster = L.markerClusterGroup({
-    // turn off markercluster's spiderfy
     spiderfyOnEveryZoom: false,
     spiderfyOnClick: false,
-    disableClusteringAtZoom: 16 // optional to disable cluster at certain point
+    disableClusteringAtZoom: 16
   });
   map.addLayer(markerCluster);
 
-  // 3) OverlappingMarkerSpiderfier instance
+  // 6) OverlappingMarkerSpiderfier instance
   const oms = new OverlappingMarkerSpiderfier(map, {
     keepSpiderfied: true
   });
-  
-  // oms.addListener('click', marker => marker.openPopup());
 
-  // 4) Two icons: default & highlight
+  // 7) Two icons: default & highlight
   const defaultIcon = L.icon({
     iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
     shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
@@ -129,12 +149,11 @@ $(function(){
 
   let currentlyHighlightedMarker = null;
 
-  // 5) Hard-code "today" to 2025-03-07
+  // 8) Hard-code "today" to 2025-03-07 and initialize date range
   const fakeToday = moment('2025-03-07', 'YYYY-MM-DD');
   let endDate   = fakeToday.clone().subtract(1, 'days');
   let startDate = endDate.clone().subtract(30, 'days');
 
-  // 6) Initialize the date range picker
   $('#issuedDateRange').daterangepicker({
     autoApply: false,
     linkedCalendars: true,
@@ -167,9 +186,9 @@ $(function(){
     console.log("Selected: " + start.format('YYYY-MM-DD') + " - " + end.format('YYYY-MM-DD'));
   });
 
-  // 7) On "Search"
+  // 9) On "Search" button click
   $('#searchBtn').click(async () => {
-    // Clear old markers from the cluster
+    // Clear old markers
     markerCluster.clearLayers();
     currentlyHighlightedMarker = null;
 
@@ -207,10 +226,8 @@ $(function(){
               <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
             `);
 
-            
-            // For normal highlight on click
+            // Highlight on click
             marker.on('click', () => {
-              // highlight logic
               if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
                 currentlyHighlightedMarker.setIcon(defaultIcon);
               }
@@ -218,12 +235,8 @@ $(function(){
               currentlyHighlightedMarker = marker;
             });
 
-            // 8) Add marker to cluster
             markerCluster.addLayer(marker);
-
-            // 9) Also add to OverlappingMarkerSpiderfier
             oms.addMarker(marker);
-
             latLngs.push([lat, lng]);
           }
         }

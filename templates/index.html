@@ -86,37 +86,35 @@
 
 <script>
 $(function(){
-  // 1) Define the base layer (OpenStreetMap)
-  const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // 1) Creating the custom Mapbox style layer as the base layer
+  //mapbox://styles/hafsairfan89/cm8ddrp9p00tm01r08ylk88ik
+  //pk.eyJ1IjoiaGFmc2FpcmZhbjg5IiwiYSI6ImNtOGNiNjUxYjBiemgyaXE1dGI0ZGxma2MifQ.ze4nyrDI1JHCJzP5YgG-jw
+  const mapboxStyleUrl = 'https://api.mapbox.com/styles/v1/hafsairfan89/cm8ddrp9p00tm01r08ylk88ik/tiles/512/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiaGFmc2FpcmZhbjg5IiwiYSI6ImNtOGNiNjUxYjBiemgyaXE1dGI0ZGxma2MifQ.ze4nyrDI1JHCJzP5YgG-jw';
+  const customLayer = L.tileLayer(mapboxStyleUrl, {
+    tileSize: 512,
+    zoomOffset: -1,
+    maxZoom: 19,
+    attribution: '© Mapbox © OpenStreetMap'
+  });
+
+  // 2) Creating an OSM layer as an alternative base layer.
+  const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: 'Map data © OpenStreetMap contributors'
   });
 
-  // 2) Create the map and add the base layer
+  // 3) Creating the map with the custom Mapbox layer as the default base layer.
   const map = L.map('map', {
-    layers: [baseLayer]  
+    layers: [customLayer]  
   }).setView([51.0447, -114.0719], 11);
 
-  // 3) Mapbox style layer with tileSize, zoomOffset, and @2x
-  //    mapbox://styles/hafsairfan89/cm8c0ztd900i601soefp963h2
-  const trafficLayer = L.tileLayer(
-    'https://api.mapbox.com/styles/v1/hafsairfan89/cm8c0ztd900i601soefp963h2/tiles/512/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiaGFmc2FpcmZhbjg5IiwiYSI6ImNtOGNiNjUxYjBiemgyaXE1dGI0ZGxma2MifQ.ze4nyrDI1JHCJzP5YgG-jw',
-    {
-      tileSize: 512,
-      zoomOffset: -1,
-      maxZoom: 19,
-      attribution: '© Mapbox © OpenStreetMap'
-    }
-  );
-
-  trafficLayer.addTo(map);
-
-  // 4) Layer control for toggling the traffic layer
-  const overlayMaps = {
-    "Traffic Incidents": trafficLayer
+  // 4) Layer control to allow switching between Mapbox and OSM.
+  const baseLayers = {
+    "Custom Mapbox": customLayer,
+    "OpenStreetMap": osmLayer
   };
-  L.control.layers(null, overlayMaps).addTo(map);
+  L.control.layers(baseLayers).addTo(map);
 
-  // 5) Create a MarkerClusterGroup with spiderfy disabled
+  // 5) Create a MarkerClusterGroup with spiderfy disabled.
   let markerCluster = L.markerClusterGroup({
     spiderfyOnEveryZoom: false,
     spiderfyOnClick: false,
@@ -124,12 +122,12 @@ $(function(){
   });
   map.addLayer(markerCluster);
 
-  // 6) OverlappingMarkerSpiderfier instance
+  // 6) OverlappingMarkerSpiderfier instance.
   const oms = new OverlappingMarkerSpiderfier(map, {
     keepSpiderfied: true
   });
 
-  // 7) Two icons: default & highlight
+  // 7) Define two icons: default & highlight.
   const defaultIcon = L.icon({
     iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-blue.png',
     shadowUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-shadow.png',
@@ -149,7 +147,7 @@ $(function(){
 
   let currentlyHighlightedMarker = null;
 
-  // 8) Hard-code "today" to 2025-03-07 and initialize date range
+  // 8) Hard-code "today" to 2025-03-07 and initialize date range.
   const fakeToday = moment('2025-03-07', 'YYYY-MM-DD');
   let endDate   = fakeToday.clone().subtract(1, 'days');
   let startDate = endDate.clone().subtract(30, 'days');
@@ -186,9 +184,9 @@ $(function(){
     console.log("Selected: " + start.format('YYYY-MM-DD') + " - " + end.format('YYYY-MM-DD'));
   });
 
-  // 9) On "Search" button click
+  // 9) On "Search" button click, fetch and display the traffic incident markers.
   $('#searchBtn').click(async () => {
-    // Clear old markers
+    // Clear old markers.
     markerCluster.clearLayers();
     currentlyHighlightedMarker = null;
 
@@ -216,7 +214,7 @@ $(function(){
           if (typeof lat === 'number' && typeof lng === 'number') {
             const props = feature.properties || {};
 
-            // Create marker
+            // Create marker.
             const marker = L.marker([lat, lng], { icon: defaultIcon });
             marker.bindPopup(`
               <strong>Issued Date:</strong> ${props.issueddate}<br/>
@@ -226,7 +224,7 @@ $(function(){
               <strong>Address:</strong> ${props.originaladdress || 'N/A'}<br/>
             `);
 
-            // Highlight on click
+            // Highlight on click.
             marker.on('click', () => {
               if (currentlyHighlightedMarker && currentlyHighlightedMarker !== marker) {
                 currentlyHighlightedMarker.setIcon(defaultIcon);
